@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Digital Twin Drone</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Boxicons for icons -->
+    <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
+</head>
+
+<body>
+    <div class="app-container">
+        <header class="main-header">
+            <div class="header-logos">
+                <img src="logo-ub.png" alt="Logo UB" class="logo-ub">
+                <img src="logo-brone.png" alt="Logo Brone" class="logo-brone">
+            </div>
+            <h1>Digital Twin <strong>Brone</strong></h1>
+            <div class="header-controls">
+                <button id="btnBatteryConfig" class="btn btn-secondary">
+                    <i class='bx bx-battery'></i> Battery Config
+                </button>
+                <button id="btnStart" class="btn btn-primary">Start Program</button>
+                <button id="btnReset" class="btn btn-secondary">Reset Digital Twin</button>
+            </div>
+        </header>
+
+        <main class="dashboard-grid">
+            <!-- Battery Estimation Card -->
+            <div class="card battery-card">
+                <div class="card-content">
+                    <h3>Battery Estimation</h3>
+
+                    <!-- Fill-Style Battery Indicator -->
+                    <div class="battery-fill-container">
+                        <svg class="battery-fill-svg" viewBox="0 0 120 180" xmlns="http://www.w3.org/2000/svg">
+                            <!-- Gradient Definition -->
+                            <defs>
+                                <linearGradient id="batteryGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                                    <stop offset="0%" style="stop-color:#6EE7B7;stop-opacity:1" />
+                                    <stop offset="100%" style="stop-color:#4ADE80;stop-opacity:1" />
+                                </linearGradient>
+                            </defs>
+
+                            <!-- Battery Terminal (Smaller, more subtle) -->
+                            <rect x="45" y="0" width="30" height="12" rx="6" ry="6" fill="#CBD5E1" opacity="0.8" />
+
+                            <!-- Battery Body Outline -->
+                            <rect x="10" y="15" width="100" height="155" rx="18" ry="18" fill="none" stroke="#CBD5E1"
+                                stroke-width="4" />
+
+                            <!-- Battery Body Background -->
+                            <rect x="13" y="18" width="94" height="149" rx="15" ry="15" fill="#F1F5F9" />
+
+                            <!-- Fill Level - 92% = 149 * 0.92 = 137 height -->
+                            <rect class="battery-fill-level" x="13" y="30" width="94" height="137" rx="15" ry="15"
+                                fill="url(#batteryGradient)" />
+
+                            <!-- Percentage Text -->
+                            <text class="battery-percentage-text" x="60" y="95" text-anchor="middle"
+                                dominant-baseline="middle">92%</text>
+                        </svg>
+                    </div>
+
+                    <!-- Remaining Time -->
+                    <div class="remaining-section">
+                        <p class="remaining-label">Remaining Time</p>
+                        <p class="remaining-value">1h 5m</p>
+                    </div>
+
+                    <!-- Battery Specifications -->
+                    <div class="battery-spec-section">
+                        <div class="spec-icon">⚡</div>
+                        <div class="spec-text">
+                            <div class="spec-title" id="batterySpecTitle">2x LiPo 4S</div>
+                            <div class="spec-details" id="batterySpecDetails">5200mAh • Series</div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- Electrical Graph Card -->
+            <div class="card graph-card">
+                <div class="card-header">
+                    <h3>Electrical Graph</h3>
+
+                    <!-- New Metrics Row (Moved from Right Card) -->
+                    <div class="metrics-row">
+                        <div class="metric-item">
+                            <span class="metric-label">Voltage</span>
+                            <span class="metric-value" id="valVoltage">24.8 V</span>
+                        </div>
+                        <div class="metric-divider"></div>
+                        <div class="metric-item">
+                            <span class="metric-label">Current</span>
+                            <span class="metric-value" id="valCurrent">12 A</span>
+                        </div>
+                        <div class="metric-divider"></div>
+                        <div class="metric-item">
+                            <span class="metric-label">Power</span>
+                            <span class="metric-value" id="valPower">264 W</span>
+                        </div>
+                        <div class="metric-divider"></div>
+                        <div class="metric-item">
+                            <span class="metric-label">Avg RPM</span>
+                            <span class="metric-value" id="valRPM">0 rpm</span>
+                        </div>
+                    </div>
+
+                    <div class="graph-controls">
+                        <!-- Mode Only Here -->
+                        <div class="segmented-control" id="graphModeControls">
+                            <button class="control-btn active" data-value="power">Power</button>
+                            <button class="control-btn" data-value="voltage">Voltage</button>
+                            <button class="control-btn" data-value="current">Current</button>
+                            <button class="control-btn" data-value="torque">Torque</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <canvas id="electricalChart"></canvas>
+                </div>
+
+                <!-- Time Range Moved to Footer -->
+                <div class="time-range-selector" id="timeRangeControls">
+                    <button class="control-btn active" data-value="seconds">Seconds</button>
+                    <button class="control-btn" data-value="minutes">Minutes</button>
+                    <button class="control-btn" data-value="hours">Hours</button>
+                </div>
+            </div>
+
+            <!-- Rover Visualizer Card (Dedicated) -->
+            <div class="card visualizer-card">
+                <h3>Rover Visualizer</h3>
+                <!-- Torque Label Removed/Integrated into visualizer components if needed, or just kept clean -->
+
+                <div class="omni-visualizer">
+                    <!-- Overall Direction Indicator (Center) -->
+                    <div class="overall-direction" id="overallDirection">
+                        <i class='bx bx-up-arrow-alt'></i>
+                    </div>
+
+                    <!-- SVG Drone in Center (Absolute Positioned) -->
+                    <svg class="drone-svg" viewBox="0 0 200 200">
+                        <!-- Central Body -->
+                        <circle cx="100" cy="100" r="20" fill="#e2e8f0" stroke="#94a3b8" stroke-width="2" />
+                        <circle cx="100" cy="100" r="6" fill="#3b82f6" />
+
+                        <!-- Drone Arms (Diagonal Lines) -->
+                        <line x1="85" y1="85" x2="30" y2="30" stroke="#94a3b8" stroke-width="6"
+                            stroke-linecap="round" />
+                        <line x1="115" y1="85" x2="170" y2="30" stroke="#94a3b8" stroke-width="6"
+                            stroke-linecap="round" />
+                        <line x1="85" y1="115" x2="30" y2="170" stroke="#94a3b8" stroke-width="6"
+                            stroke-linecap="round" />
+                        <line x1="115" y1="115" x2="170" y2="170" stroke="#94a3b8" stroke-width="6"
+                            stroke-linecap="round" />
+
+                        <!-- Motor Indicators -->
+                        <circle cx="30" cy="30" r="10" fill="white" stroke="#cbd5e1" stroke-width="2" />
+                        <circle cx="170" cy="30" r="10" fill="white" stroke="#cbd5e1" stroke-width="2" />
+                        <circle cx="30" cy="170" r="10" fill="white" stroke="#cbd5e1" stroke-width="2" />
+                        <circle cx="170" cy="170" r="10" fill="white" stroke="#cbd5e1" stroke-width="2" />
+                    </svg>
+
+                    <!-- FL Motor Card (Top Left) -->
+                    <div class="motor-card motor-fl">
+                        <div class="card-header-mini">
+                            <span class="position-label">FL</span>
+                            <span class="position-desc">Front Left</span>
+                        </div>
+                        <div class="rpm-display">
+                            <span class="rpm-value" id="rpmFL">0</span>
+                            <span class="rpm-unit">RPM</span>
+                        </div>
+                        <div class="torque-display">
+                            <div class="torque-icon">
+                                <i class='bx bx-cog'></i>
+                            </div>
+                            <span class="torque-label">TORQUE</span>
+                            <span class="torque-value" id="valFL">+0.00 <span class="torque-unit">Nm</span></span>
+                        </div>
+                        <div class="rpm-progress">
+                            <div class="rpm-progress-bar" id="progFL"></div>
+                        </div>
+                    </div>
+
+                    <!-- FR Motor Card (Top Right) -->
+                    <div class="motor-card motor-fr">
+                        <div class="card-header-mini">
+                            <span class="position-label">FR</span>
+                            <span class="position-desc">Front Right</span>
+                        </div>
+                        <div class="rpm-display">
+                            <span class="rpm-value" id="rpmFR">0</span>
+                            <span class="rpm-unit">RPM</span>
+                        </div>
+                        <div class="torque-display">
+                            <div class="torque-icon">
+                                <i class='bx bx-cog'></i>
+                            </div>
+                            <span class="torque-label">TORQUE</span>
+                            <span class="torque-value" id="valFR">+0.00 <span class="torque-unit">Nm</span></span>
+                        </div>
+                        <div class="rpm-progress">
+                            <div class="rpm-progress-bar" id="progFR"></div>
+                        </div>
+                    </div>
+
+                    <!-- RL Motor Card (Bottom Left) -->
+                    <div class="motor-card motor-rl">
+                        <div class="card-header-mini">
+                            <span class="position-label">RL</span>
+                            <span class="position-desc">Rear Left</span>
+                        </div>
+                        <div class="rpm-display">
+                            <span class="rpm-value" id="rpmRL">0</span>
+                            <span class="rpm-unit">RPM</span>
+                        </div>
+                        <div class="torque-display">
+                            <div class="torque-icon">
+                                <i class='bx bx-cog'></i>
+                            </div>
+                            <span class="torque-label">TORQUE</span>
+                            <span class="torque-value" id="valRL">+0.00 <span class="torque-unit">Nm</span></span>
+                        </div>
+                        <div class="rpm-progress">
+                            <div class="rpm-progress-bar" id="progRL"></div>
+                        </div>
+                    </div>
+
+                    <!-- RR Motor Card (Bottom Right) -->
+                    <div class="motor-card motor-rr">
+                        <div class="card-header-mini">
+                            <span class="position-label">RR</span>
+                            <span class="position-desc">Rear Right</span>
+                        </div>
+                        <div class="rpm-display">
+                            <span class="rpm-value" id="rpmRR">0</span>
+                            <span class="rpm-unit">RPM</span>
+                        </div>
+                        <div class="torque-display">
+                            <div class="torque-icon">
+                                <i class='bx bx-cog'></i>
+                            </div>
+                            <span class="torque-label">TORQUE</span>
+                            <span class="torque-value" id="valRR">+0.00 <span class="torque-unit">Nm</span></span>
+                        </div>
+                        <div class="rpm-progress">
+                            <div class="rpm-progress-bar" id="progRR"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Terminal Log Card -->
+            <div class="card terminal-card">
+                <h3>Terminal Log</h3>
+                <div class="terminal-window">
+                    <div class="terminal-logs">
+                        <span class="log-msg">Webots Connected</span>
+                    </div>
+                    <div class="terminal-status-bar">
+                        <div class="status-item">UPTIME: <span id="sysUptime">00:00:00</span></div>
+                        <div class="status-item">NODES: <span class="highlight">4</span></div>
+                        <div class="status-item">CPU: <span id="sysCpu" class="highlight">14%</span></div>
+                        <div class="status-item">MEM: <span id="sysMem" class="highlight">32%</span></div>
+                        <div class="status-item">TEMP: <span id="sysTemp" class="highlight">42°C</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Connection Status -->
+            <div class="card status-card">
+                <h3>Connection Status</h3>
+                <div class="status-content">
+                    <div class="status-main">
+                        <div class="status-indicator-wrapper">
+                            <span class="status-dot"></span>
+                            <span class="status-text">Connected</span>
+                        </div>
+                        <div class="ping-wrapper">
+                            <i class='bx bx-wifi'></i>
+                            <span class="status-ping">20 ms</span>
+                        </div>
+                    </div>
+
+                    <div class="status-divider"></div>
+
+                    <div class="time-metrics">
+                        <div class="time-display">
+                            <span class="time-label"><i class='bx bx-time-five'></i> Current</span>
+                            <span id="currentTime" class="time-value">--:--:--</span>
+                        </div>
+                        <div class="time-display">
+                            <span class="time-label"><i class='bx bx-timer'></i> Running</span>
+                            <span id="runningTime" class="time-value">00:00:00</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+
+        </main>
+    </div>
+
+
+    <!-- Battery Configuration Modal -->
+    <div id="batteryConfigModal" class="modal">
+        <div class="modal-content">
+            <h2><i class='bx bx-battery'></i> Battery Configuration</h2>
+            <p style="color: #94a3b8; margin-bottom: 20px;">Configure your LiPo battery setup. Changes require
+                controller restart.</p>
+
+            <div class="config-section">
+                <label for="batteryType">Battery Type (per pack):</label>
+                <select id="batteryType" class="config-select">
+                    <option value="2S">2S - 7.4V (8.4V max)</option>
+                    <option value="3S" selected>3S - 11.1V (12.6V max)</option>
+                    <option value="4S">4S - 14.8V (16.8V max)</option>
+                    <option value="Custom">Custom (Manual Input)</option>
+                </select>
+            </div>
+
+            <!-- Custom Voltage Inputs (Hidden by default) -->
+            <div id="customVoltageInputs" class="config-section"
+                style="display: none; background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px dashed #cbd5e1;">
+                <label style="margin-bottom: 15px; color: #64748b; display: block; font-weight: 500;">Custom Battery
+                    Configuration:</label>
+
+                <!-- Series selector for custom mode -->
+                <div style="margin-bottom: 15px;">
+                    <label for="customSeriesConfig"
+                        style="font-size: 0.85rem; color: #475569; display: block; margin-bottom: 5px;">Number of
+                        batteries in series:</label>
+                    <select id="customSeriesConfig" class="config-select">
+                        <option value="1">1x (Single battery)</option>
+                        <option value="2" selected>2x (Series - Double voltage)</option>
+                    </select>
+                </div>
+
+                <!-- Dynamic battery inputs container -->
+                <div id="dynamicBatteryInputs" style="display: flex; flex-direction: column; gap: 15px;">
+                    <!-- Battery input groups will be generated here by JavaScript -->
+                </div>
+            </div>
+
+            <div class="config-section" id="standardSeriesConfig">
+                <label for="seriesConfig">Series Configuration:</label>
+                <select id="seriesConfig" class="config-select">
+                    <option value="1">1x (Single battery)</option>
+                    <option value="2" selected>2x (Series - Double voltage)</option>
+                </select>
+            </div>
+
+            <div class="config-preview">
+                <div class="preview-label">Result Configuration:</div>
+                <div class="preview-value" id="configPreview">
+                    <span class="preview-cells">6S</span>
+                    <span class="preview-voltage">22.2V nominal</span>
+                </div>
+            </div>
+
+            <div class="modal-actions">
+                <button id="btnCancelConfig" class="btn btn-secondary">Cancel</button>
+                <button id="btnApplyConfig" class="btn btn-primary">Apply Configuration</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirmation Modal -->
+    <div id="confirmationModal" class="modal">
+        <div class="modal-content">
+            <h2 id="modalTitle">Confirm Action</h2>
+            <p id="modalMessage">Are you sure you want to proceed?</p>
+            <div class="modal-actions">
+                <button id="btnCancel" class="btn btn-secondary">Cancel</button>
+                <button id="btnConfirm" class="btn btn-primary">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="main.ts"></script>
+</body>
+
+</html>
