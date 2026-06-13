@@ -4,6 +4,11 @@ Orange Pi TCP Server + Serial Bridge
 ====================================
 Receives YOLO commands via TCP from Jetson and forwards to ESP32 via serial.
 Also publishes telemetry to ROS2 for laptop monitoring.
+
+Drive Modes (controlled via /drive_mode topic, std_msgs/String):
+  "YOLO"     — (default) Jetson YOLO controls the base via TCP
+  "DSC"      — Laptop DSC Wanderer node controls via /cmd_vel_dsc (Twist)
+  "STOP"     — Hard stop, ignores all movement commands
 """
 
 import socket
@@ -19,7 +24,7 @@ import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import JointState, BatteryState
 from geometry_msgs.msg import Twist
-from std_msgs.msg import Bool
+from std_msgs.msg import Bool, String
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSDurabilityPolicy
 
 class TCPToSerial(Node):
@@ -43,7 +48,23 @@ class TCPToSerial(Node):
         self.last_vx = 0.0
         self.last_vy = 0.0
         self.last_w = 0.0
-        
+
+        # ── Drive Mode ──────────────────────────────────────────
+        # "YOLO" : Jetson TCP commands drive the base (default)
+        # "DSC"  : Laptop DSC node drives the base via /cmd_vel_dsc
+        # "STOP" : All movement inhibited
+        self.drive_mode = "YOLO"
+
+        # Latest DSC velocity command received from laptop
+        self._dsc_vx = 0.0
+        self._dsc_vy = 0.0
+        self._dsc_w  = 0.0
+        self._dsc_last_stamp = 0.0   # time.time() of last /cmd_vel_dsc msg
+
+        # DSC command timeout: if no message received within this window,
+        # treat as zero-velocity (safety fallback)
+        self.DSC_TIMEOUT_SEC = 0.5
+
         # Logging state
         self.telemetry_count = 0
         
@@ -58,6 +79,30 @@ class TCPToSerial(Node):
             self.enable_callback,
             10
         )
+
+        # ── Drive Mode subscriber ───────────────────────────────
+        # Topic: /drive_mode (std_msgs/String)
+        # Publish from laptop:
+        #   ros2 topic pub /drive_mode std_msgs/String "data: 'DSC'"
+        #   ros2 topic pub /drive_mode std_msgs/String "data: 'YOLO'"
+        self.drive_mode_sub = self.create_subscription(
+            String,
+            '/drive_mode',
+            self.drive_mode_callback,
+            10
+        )
+
+        # ── DSC velocity subscriber ─────────────────────────────
+        # Published by dsc_wanderer_node.py on the laptop
+        self.dsc_cmd_sub = self.create_subscription(
+            Twist,
+            '/cmd_vel_dsc',
+            self.dsc_cmd_callback,
+            10
+        )
+
+        # DSC execution timer at 20Hz (matches DSC node output rate)
+        self.dsc_timer = self.create_timer(0.05, self.dsc_execution_tick)
         
         # TCP Server
         try:
@@ -121,6 +166,83 @@ class TCPToSerial(Node):
             # Emergency Stop
             self.send_robot_command(0, 0, 0)
 
+    def drive_mode_callback(self, msg: String):
+        """
+        Switch between drive modes.
+
+        Accepted values (case-insensitive):
+          YOLO  — Jetson TCP controls the base
+          DSC   — Laptop DSC Wanderer controls the base
+          STOP  — Hard stop, all commands ignored
+        """
+        new_mode = msg.data.strip().upper()
+        if new_mode not in ("YOLO", "DSC", "STOP"):
+            self.get_logger().warn(f"Unknown drive_mode: '{msg.data}' — ignoring")
+            return
+
+        if new_mode != self.drive_mode:
+            self.get_logger().warn(f"Drive mode: {self.drive_mode} → {new_mode}")
+            self.drive_mode = new_mode
+
+            # Immediately stop when switching modes (safety)
+            self.send_robot_command(0, 0, 0)
+
+    def dsc_cmd_callback(self, msg: Twist):
+        """
+        Cache the latest DSC velocity command.
+        Actual execution happens in dsc_execution_tick() at 20Hz,
+        but only when drive_mode == "DSC".
+        """
+        self._dsc_vx = msg.linear.x
+        self._dsc_vy = msg.linear.y
+        self._dsc_w  = msg.angular.z
+        self._dsc_last_stamp = time.time()
+
+    def dsc_execution_tick(self):
+        """
+        20Hz timer: execute the latest DSC command when in DSC mode.
+
+        The DSC node publishes body-frame velocities in m/s.
+        We map them to the same PWM scale used by YOLO (multiplier 63).
+
+        DSC max output: MAX_VX = MAX_VY = 0.35 m/s → maps to ±63 PWM units.
+        Scale factor: 63 / 0.35 = 180 PWM·s/m
+        """
+        if self.drive_mode != "DSC":
+            return
+
+        if not self.system_enabled:
+            return
+
+        # Safety: zero out if DSC node went silent
+        age = time.time() - self._dsc_last_stamp
+        if age > self.DSC_TIMEOUT_SEC:
+            self.send_robot_command(0, 0, 0)
+            if int(age * 2) % 10 == 0:  # log every ~5s
+                self.get_logger().warn(
+                    f"DSC: no cmd_vel_dsc for {age:.1f}s — holding stop"
+                )
+            return
+
+        # Convert m/s → PWM scale (same units as YOLO path)
+        # YOLO uses: Vx = y_joystick * 63  (range ≈ [-63, 63])
+        # DSC outputs: body_vx in m/s, max ±0.35 m/s
+        DSC_SCALE = 63.0 / 0.35   # ≈ 180  PWM·s/m
+
+        Vx = self._dsc_vx * DSC_SCALE
+        Vy = self._dsc_vy * DSC_SCALE
+        W  = self._dsc_w               # already in rad/s, send_robot_command uses raw w
+
+        # Clamp to safe range
+        Vx = max(-63.0, min(63.0, Vx))
+        Vy = max(-63.0, min(63.0, Vy))
+
+        # Apply deadzone (same as YOLO path)
+        if abs(Vx) < 5: Vx = 0
+        if abs(Vy) < 5: Vy = 0
+
+        self.send_robot_command(Vx, Vy, W)
+
     def send_robot_command(self, vx, vy, w):
         """Send command to ESP32 (vx, vy, w are centered at 0)"""
         # Boolean rotation buttons logic
@@ -152,9 +274,15 @@ class TCPToSerial(Node):
                 self.get_logger().error(f"Serial write error: {e}")
 
     def process_yolo_command(self, x, y, z):
-        """Process YOLO command (TCP)"""
-        # Check if system is enabled
+        """
+        Process YOLO command (TCP).
+        Ignored when drive_mode is not YOLO.
+        """
         if not self.system_enabled:
+            return
+
+        # Ignore Jetson commands when DSC or STOP is active
+        if self.drive_mode != "YOLO":
             return
 
         # Half speed requested: 127 -> 63
@@ -173,7 +301,10 @@ class TCPToSerial(Node):
         # Heartbeat
         self.telemetry_count += 1
         if self.telemetry_count % 25 == 0:
-            self.get_logger().info(f"System Active (TCP Mode) | Vx={self.last_vx:.2f}, Vy={self.last_vy:.2f}")
+            self.get_logger().info(
+                f"System Active | Mode={self.drive_mode} | "
+                f"Vx={self.last_vx:.2f}, Vy={self.last_vy:.2f}"
+            )
             
         # Battery
         battery_msg = BatteryState()
