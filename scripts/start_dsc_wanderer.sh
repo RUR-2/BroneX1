@@ -16,7 +16,7 @@ NC='\033[0m'
 # ── ROS2 environment ─────────────────────────────────────────────────────────
 source /opt/ros/jazzy/setup.bash
 export ROS_DOMAIN_ID=10
-export CYCLONEDDS_URI=file:///home/codename-hydra/Documents/cyclonedds.xml
+export CYCLONEDDS_URI=file://${HOME}/Documents/cyclonedds.xml
 export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 export ROS_DISABLE_TYPE_HASH_CHECK=1
 
@@ -67,7 +67,7 @@ if [[ "$1" == "--auto" ]]; then
         sleep 4
         source /opt/ros/jazzy/setup.bash
         export ROS_DOMAIN_ID=10
-        export CYCLONEDDS_URI=file:///home/codename-hydra/Documents/cyclonedds.xml
+        export CYCLONEDDS_URI=file://${HOME}/Documents/cyclonedds.xml
         export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
         export ROS_DISABLE_TYPE_HASH_CHECK=1
         ros2 topic pub --once /drive_mode std_msgs/msg/String "data: 'DSC'" > /dev/null 2>&1

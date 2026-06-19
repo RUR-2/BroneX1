@@ -2,14 +2,24 @@
 <CycloneDDS xmlns="https://cdds.io/config" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="https://cdds.io/config https://raw.githubusercontent.com/eclipse-cyclonedds/cyclonedds/master/etc/cyclonedds.xsd">
     <Domain id="any">
         <General>
-            <NetworkInterfaceAddress>wlo1</NetworkInterfaceAddress>
+            <Interfaces>
+                <NetworkInterface name="eth0" />
+                <NetworkInterface name="lo" />
+            </Interfaces>
             <AllowMulticast>false</AllowMulticast>
         </General>
         <Discovery>
             <ParticipantIndex>auto</ParticipantIndex>
             <Peers>
-                <Peer address="10.30.117.200"/>
+                <Peer address="127.0.0.1"/>
+                <!-- Uncomment below when Orange Pi is connected -->
+                <!-- <Peer address="10.30.117.200"/> -->
             </Peers>
         </Discovery>
+        <Internal>
+            <Watermarks>
+                <WhcHigh>500kB</WhcHigh>
+            </Watermarks>
+        </Internal>
     </Domain>
 </CycloneDDS>
